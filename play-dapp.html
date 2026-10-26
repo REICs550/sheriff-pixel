@@ -110,7 +110,8 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
 #dwc{background:rgba(27,20,36,.96);border:3px solid #ffd23f;border-radius:12px;padding:14px 18px;font:14px "Courier New",monospace;color:#fff;max-width:min(440px,92vw);text-align:center}
 #dw.mini #dwc{padding:6px 10px;font-size:12px}#dw.mini .big{display:none}
 #dwc h2{margin:0 0 6px;color:#ffe29a;font-size:20px}#dwc button{font:bold 15px "Courier New",monospace;background:#ff7fae;color:#1b1424;border:2px solid #fff;border-radius:8px;padding:8px 14px;margin:6px 3px;cursor:pointer}
-#dwc button:disabled{opacity:.5;cursor:default}#dwc a{color:#ffe29a}#dwc small{color:#a8d4ff}#dwmsg{margin-top:6px;min-height:1.2em}#dwmsg.err{color:#ff9e9e}`;
+#dwc button:disabled{opacity:.5;cursor:default}#dwc a{color:#ffe29a}#dwc small{color:#a8d4ff}#dwmsg{margin-top:6px;min-height:1.2em}#dwmsg.err{color:#ff9e9e}
+#touch #bp{top:34px;left:max(10px,env(safe-area-inset-left));right:auto}`; // keep the touch pause button clear of the testnet banner + mini wallet panel
   document.head.appendChild(css);
   // --- wallet selection: DogeOS "Sign in with X" (embedded wallet SDK) + EIP-6963 picker + legacy window.ethereum fallback ---
   const DOGEOS_CLIENT_ID = window.DOGEOS_CLIENT_ID || '', DOGEOS_SDK = window.DOGEOS_SDK_URL || 'dogeos-connect.js';
@@ -226,7 +227,8 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
       const accs = await rpc('eth_requestAccounts'); account = accs && accs[0]; if (!account) throw new Error('no account');
       eth.on?.('accountsChanged', a => { account = a[0] || null; run = null; render(); });
       eth.on?.('chainChanged', () => { fee = null; render(); });
-      if (!(await ensureChain())) say('Please switch your wallet to DogeOS Chikyu testnet.', true); else say('Connected to DogeOS Chikyu testnet.');
+      let onChain = false; try { onChain = await ensureChain(); } catch (e) { if (e.code !== 4001) throw e; }
+      if (!onChain) say('Please switch your wallet to DogeOS Chikyu testnet.', true); else say('Connected to DogeOS Chikyu testnet.');
     } catch (e) { say(e.code === 4001 ? 'Connection request rejected.' : errText(e), true); }
     render();
   }
@@ -307,6 +309,7 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
   }
   function fail(reason, info) {
     if (!run) return; failed = { runId: run.runId, reason, balls: info && info.balls }; run = null; session = null;
+    if (reason !== 'died' && window.__game && window.__game.stop) window.__game.stop(); // a forfeited run must not keep playing
     ui.className = ''; say(''); render();
   }
   window.addEventListener('beforeunload', e => { if (run) { e.preventDefault(); e.returnValue = 'Leaving forfeits your entry fee.'; } });
@@ -318,8 +321,14 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
     else if (id === 'dwpay') pay(); else if (id === 'dwforfeit') signForfeit(); else if (id === 'dwaccept') signAccept();
     else if (id === 'dwquit') { if (confirm('Quit this run? Your entry fee is forfeited to the pool — no refund.')) fail('quit'); } else if (id === 'dwmm') location.href = 'https://metamask.app.link/dapp/' + location.host + location.pathname;
   });
+  function getSession(r, n) { // one session per paid run; retries transient network errors
+    return fetch(API + '/session', { method: 'POST', headers: { 'content-type': 'application/json', 'X-Pinggy-No-Screen': '1' }, body: JSON.stringify({ runId: r.runId, player: account }) })
+      .then(x => x.json()).then(s => { if (run !== r) return; if (s.ok) session = s; else say('Run not accepted: ' + esc(s.error), true); })
+      .catch(() => n > 0 ? new Promise(x => setTimeout(x, 2500)).then(() => run === r && getSession(r, n - 1)) : run === r && say('Rewards backend offline — reward may not be claimable.', true));
+  }
   async function claim(stats) {
-    if (!run || !session) { say('No paid run/session — reward not claimable.', true); return; }
+    if (run && !session) { say('Reconnecting to the rewards server…'); for (let i = 0; i < 3 && !session; i++) { await getSession(run, 0); if (!session) await new Promise(r => setTimeout(r, 2500)); } }
+    if (!run || !session) { if (run) { say('Rewards server unreachable — this run can\'t be verified, so it counts as unfinished. Sign the forfeit to play again.', true); fail('rejected'); } else say('No paid run — reward not claimable.', true); return; }
     if (!stats.bossDefeated) { say('Level ended without beating the boss — no reward.', true); fail('no_boss'); return; }
     say('Boss defeated! Verifying your run and posting the result on-chain…'); ui.className = '';
     const done = run;
@@ -338,11 +347,10 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
     onStart() {
       if (failed || reward) { ui.className = ''; say('Sign your last result first — no new game until it is signed.', true); render(); return false; }
       if (!run) { ui.className = ''; say(account ? 'Pay the entry fee to start a rewarded run.' : 'Connect your wallet to play for test DOGE.'); return false; }
-      session = null;
-      const getSession = n => fetch(API + '/session', { method: 'POST', headers: { 'content-type': 'application/json', 'X-Pinggy-No-Screen': '1' }, body: JSON.stringify({ runId: run.runId, player: account }) })
-        .then(r => r.json()).then(s => { if (s.ok) session = s; else say('Run not accepted: ' + esc(s.error), true); })
-        .catch(() => n > 0 ? new Promise(r => setTimeout(r, 2500)).then(() => run && getSession(n - 1)) : say('Rewards backend offline — reward may not be claimable.', true));
-      getSession(4);
+      if (run.started) { // restart mid-run (R / ↻ RESTART) would be a free retry with fresh hearts + clock: it forfeits instead
+        if (!confirm('Restarting ends this paid run — your entry fee is forfeited to the pool (no refund). Restart anyway?')) return false;
+        fail('quit'); return false; }
+      run.started = true; session = null; getSession(run, 4);
     },
     onEnd(s) { setTimeout(() => claim(s), 1500); },
     onFail(info) { fail((info && info.reason) || 'died', info); }, quit: () => fail('quit'), signForfeit, signAccept, get reward() { return reward; }, get failed() { return failed; },
@@ -914,7 +922,7 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 window.__game = { get state() { return state; }, get player() { return player; }, get saved() { return saved; }, get hearts() { return hearts; }, get jars() { return jarsFreed; }, get sd() { return sd; }, startGame, press, release,
-  debugWarp(x) { player.x = x; player.y = GY - 40; camX = clamp(x - 200, 0, LEVEL_W - W); }, debugFinish() { toEnd(); }, debugBeatBoss() { startShowdown(); sd.pw = 2; sd.ph = 'win'; toEnd(); }, debugHit() { player.inv = 0; damage(0); }, get hits() { return hits; }, debugGive(n) { saved = Math.min(TOTAL, saved + n); }, debugBalls(n) { orbs.slice(0, n).forEach(o => { if (!o.got) { o.got = true; saved++; } }); }, debugDie() { player.inv = 0; hearts = 1; damage(0); } };
+  debugWarp(x) { player.x = x; player.y = GY - 40; camX = clamp(x - 200, 0, LEVEL_W - W); }, stop() { state = 'title'; setPaused(false); music.pause(); }, debugFinish() { toEnd(); }, debugBeatBoss() { startShowdown(); sd.pw = 2; sd.ph = 'win'; toEnd(); }, debugHit() { player.inv = 0; damage(0); }, get hits() { return hits; }, debugGive(n) { saved = Math.min(TOTAL, saved + n); }, debugBalls(n) { orbs.slice(0, n).forEach(o => { if (!o.got) { o.got = true; saved++; } }); }, debugDie() { player.inv = 0; hearts = 1; damage(0); } };
 })();
 
 </script>
