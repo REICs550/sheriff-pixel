@@ -272,8 +272,10 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
       if (failed || reward) { ui.className = ''; say('Sign your last result first — no new game until it is signed.', true); render(); return false; }
       if (!run) { ui.className = ''; say(account ? 'Pay the entry fee to start a rewarded run.' : 'Connect your wallet to play for test DOGE.'); return false; }
       session = null;
-      fetch(API + '/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId: run.runId, player: account }) })
-        .then(r => r.json()).then(s => { if (s.ok) session = s; else say('Run not accepted: ' + esc(s.error), true); }).catch(() => say('Rewards backend offline — reward may not be claimable.', true));
+      const getSession = n => fetch(API + '/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId: run.runId, player: account }) })
+        .then(r => r.json()).then(s => { if (s.ok) session = s; else say('Run not accepted: ' + esc(s.error), true); })
+        .catch(() => n > 0 ? new Promise(r => setTimeout(r, 2500)).then(() => run && getSession(n - 1)) : say('Rewards backend offline — reward may not be claimable.', true));
+      getSession(4);
     },
     onEnd(s) { setTimeout(() => claim(s), 1500); },
     onFail(info) { fail((info && info.reason) || 'died', info); }, quit: () => fail('quit'), signForfeit, signAccept, get reward() { return reward; }, get failed() { return failed; },
