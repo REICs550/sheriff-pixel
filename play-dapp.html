@@ -103,7 +103,8 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
   const short = a => a.slice(0, 6) + '…' + a.slice(-4);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const css = document.createElement('style');
-  css.textContent = `#tnet{position:fixed;top:0;left:0;right:0;z-index:30;background:#7d1f30;color:#ffe29a;font:bold 12px "Courier New",monospace;text-align:center;padding:3px 4px}
+  css.textContent = `#dwinapp{position:fixed;left:0;right:0;bottom:0;z-index:40;background:#ffd23f;color:#1b1424;font:bold 14px "Courier New",monospace;text-align:center;padding:10px 8px}#dwinapp a{color:#7d1f30}#dwinapp button{font:bold 13px "Courier New",monospace;margin-left:6px}
+#tnet{position:fixed;top:0;left:0;right:0;z-index:30;background:#7d1f30;color:#ffe29a;font:bold 12px "Courier New",monospace;text-align:center;padding:3px 4px}
 #tnet a{color:#fff}
 #dw{position:fixed;inset:0;z-index:25;display:flex;align-items:center;justify-content:center;background:rgba(27,20,36,.78)}
 #dw.off{display:none}#dw.mini{inset:auto;right:8px;top:26px;background:none;display:block}
@@ -130,10 +131,35 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
       document.head.appendChild(sc);
     }));
   }
-  async function connectX() {
+  // In-app browsers (X, Instagram, Facebook, TikTok…) block the sign-in popup, so X login can't finish there.
+  const IN_APP = /Twitter|TwitterAndroid|FBAN|FBAV|FB_IAB|FBIOS|Instagram|LinkedInApp|\bLine\/|TikTok|BytedanceWebview|musical_ly|Snapchat|Pinterest|MicroMessenger|Threads|GSA\//i.test(navigator.userAgent);
+  const X_TIMEOUT_MS = window.DOGEOS_SIGNIN_TIMEOUT_MS || 60000; let xAttempt = 0;
+  const X_FALLBACK = `<br><button id="dwx">🔄 Retry Sign in with X</button><button id="dwemail">✉ Sign in with email</button>`;
+  function inAppBanner() {
+    if (!IN_APP || $('dwinapp')) return; const u = location.href.replace(/^https?:\/\//, '');
+    const b = document.createElement('div'); b.id = 'dwinapp';
+    b.innerHTML = `⚠ You're in an in-app browser — sign-in popups don't work here. <b>Open this page in Safari or Chrome</b> (tap ⋯ / share → "Open in browser").`
+      + (/Android/i.test(navigator.userAgent) ? ` <a href="intent://${esc(u)}#Intent;scheme=https;package=com.android.chrome;end">Open in Chrome</a>` : '')
+      + ` <button id="dwcopy">Copy link</button>`;
+    document.body.appendChild(b);
+    $('dwcopy').onclick = () => { (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(() => { $('dwcopy').textContent = 'Copied!'; }, () => prompt('Copy this link', location.href)); };
+  }
+  async function connectX(email) {
     if (!DOGEOS_CLIENT_ID) { say('DogeOS X sign-in is not enabled on this page yet (needs a DogeOS developer client ID). Meanwhile: open this page inside the MyDoge app (Social Wallet = your X login), or use Connect Wallet.', true); return; }
-    try { say('Opening DogeOS sign-in…'); const sdk = await loadSdk(); const r = await sdk.open(); await useProvider(r.provider, 'DogeOS wallet'); }
-    catch (e) { say(e.code === 4001 ? 'Sign-in cancelled.' : errText(e), true); }
+    const my = ++xAttempt; let timer = null;
+    const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(Object.assign(new Error('timeout'), { xTimeout: true })), X_TIMEOUT_MS); });
+    try {
+      if (IN_APP) say('⚠ In-app browsers usually block the sign-in window — if nothing happens, open this page in Safari/Chrome.', true);
+      else say(email ? 'Opening DogeOS sign-in — choose <b>Email</b> in the sign-in window…' : 'Opening DogeOS sign-in…');
+      const sdk = await Promise.race([loadSdk(), timeout]);
+      const r = await Promise.race([sdk.open(), timeout]); if (my !== xAttempt) return;
+      clearTimeout(timer); await useProvider(r.provider, 'DogeOS wallet');
+    } catch (e) {
+      if (my !== xAttempt) return;
+      if (e && e.xTimeout) { try { window.DogeOSConnect && window.DogeOSConnect.cancel(e); } catch {} console.warn('DogeOS sign-in timed out', window.DogeOSConnect && window.DogeOSConnect.state && window.DogeOSConnect.state());
+        say(`Sign-in is taking too long (no answer from the sign-in window after ${Math.round(X_TIMEOUT_MS / 1000)} s). If the X window is still open, finish there and retry; make sure pop-ups are allowed${IN_APP ? ' and open this page in Safari/Chrome' : ''}.` + X_FALLBACK, true); }
+      else say((e.code === 4001 ? 'Sign-in cancelled.' : errText(e)) + (/popup|window/i.test(e.message || '') ? ' (allow pop-ups for this site' + (IN_APP ? ', or open it in Safari/Chrome' : '') + ')' : '') + X_FALLBACK, true);
+    } finally { clearTimeout(timer); }
   }
   async function pickWallet() {
     const list = await discover();
@@ -150,7 +176,7 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
 <div class="big"><small>No test DOGE? <a href="${FAUCET}" target="_blank" rel="noopener">Get some from the faucet</a> · <a id="dwcontract" target="_blank" rel="noopener" href="${EXPLORER}/address/${ARCADE}">contract</a></small></div></div>`;
   const banner = document.createElement('div'); banner.id = 'tnet';
   banner.innerHTML = `⚠ TESTNET — DogeOS Chikyu (chain 6281971) · test DOGE has no value · <a href="${FAUCET}" target="_blank" rel="noopener">faucet</a>`;
-  document.addEventListener('DOMContentLoaded', () => { document.body.appendChild(banner); document.body.appendChild(ui); render(); });
+  document.addEventListener('DOMContentLoaded', () => { document.body.appendChild(banner); document.body.appendChild(ui); inAppBanner(); render(); });
   ['keydown', 'keyup', 'pointerdown', 'touchstart'].forEach(ev => ui.addEventListener(ev, e => e.stopPropagation()));
   const $ = id => document.getElementById(id);
   const say = (html, err) => { const m = $('dwmsg'); if (m) { m.innerHTML = html; m.className = err ? 'err' : ''; } };
@@ -315,7 +341,7 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
   window.addEventListener('beforeunload', e => { if (run) { e.preventDefault(); e.returnValue = 'Leaving forfeits your entry fee.'; } });
   ui.addEventListener('click', e => {
     const bt = e.target.closest ? e.target.closest('button') || e.target : e.target; const id = bt.id;
-    if (id === 'dwconnect') pickWallet(); else if (id === 'dwx') connectX();
+    if (id === 'dwconnect') pickWallet(); else if (id === 'dwx') connectX(); else if (id === 'dwemail') connectX(true);
     else if (/^dwpick\d+$/.test(id)) { const d = $('dwbtns').__list[+bt.dataset.i]; connect(d.provider, d.info.name); }
     else if (id === 'dwother') connect(window.ethereum, 'Other wallet'); else if (id === 'dwback') render(); else if (id === 'dwswitch') ensureChain().then(render).catch(err => say(errText(err), true));
     else if (id === 'dwpay') pay(); else if (id === 'dwforfeit') signForfeit(); else if (id === 'dwaccept') signAccept();
