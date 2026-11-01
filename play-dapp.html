@@ -118,7 +118,7 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
   document.head.appendChild(css);
   // --- wallet selection: DogeOS "Sign in with X" (embedded wallet SDK) + EIP-6963 picker + legacy window.ethereum fallback ---
   const DOGEOS_CLIENT_ID = window.DOGEOS_CLIENT_ID || '', DOGEOS_SDK = window.DOGEOS_SDK_URL || 'dogeos-connect.js';
-  const CONNECT_BTNS = `<button id="dwx">𝕏 Sign in with X (DogeOS wallet)</button><br><button id="dwconnect">Connect Wallet</button>`;
+  const CONNECT_BTNS = `<button id="dwx">𝕏 Sign in with X (DogeOS wallet)</button> <button id="dwg">G Sign in with Google (DogeOS wallet)</button><br><button id="dwconnect">Connect Wallet</button>`;
   const announced = [];
   window.addEventListener('eip6963:announceProvider', e => { const d = e.detail; if (d && d.provider && d.info && !announced.some(x => x.info.uuid === d.info.uuid)) announced.push(d); });
   window.dispatchEvent(new Event('eip6963:requestProvider'));
@@ -136,7 +136,7 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
   // In-app browsers (X, Instagram, Facebook, TikTok…) block the sign-in popup, so X login can't finish there.
   const IN_APP = /Twitter|TwitterAndroid|FBAN|FBAV|FB_IAB|FBIOS|Instagram|LinkedInApp|\bLine\/|TikTok|BytedanceWebview|musical_ly|Snapchat|Pinterest|MicroMessenger|Threads|GSA\//i.test(navigator.userAgent);
   const X_TIMEOUT_MS = window.DOGEOS_SIGNIN_TIMEOUT_MS || 60000; let xAttempt = 0;
-  const X_FALLBACK = `<br><button id="dwx">🔄 Retry Sign in with X</button><button id="dwemail">✉ Sign in with email</button>`;
+  const X_FALLBACK = `<br><button id="dwx">🔄 Retry Sign in with X</button><button id="dwg">G Retry with Google</button><button id="dwemail">✉ Sign in with email</button>`;
   function inAppBanner() {
     if (!IN_APP || $('dwinapp')) return; const u = location.href.replace(/^https?:\/\//, '');
     const b = document.createElement('div'); b.id = 'dwinapp';
@@ -146,15 +146,15 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
     document.body.appendChild(b);
     $('dwcopy').onclick = () => { (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(() => { $('dwcopy').textContent = 'Copied!'; }, () => prompt('Copy this link', location.href)); };
   }
-  async function connectX(email) {
+  async function connectX(email, provider) {
     if (!DOGEOS_CLIENT_ID) { say('DogeOS X sign-in is not enabled on this page yet (needs a DogeOS developer client ID). Meanwhile: open this page inside the MyDoge app (Social Wallet = your X login), or use Connect Wallet.', true); return; }
     const my = ++xAttempt; let timer = null;
     const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(Object.assign(new Error('timeout'), { xTimeout: true })), X_TIMEOUT_MS); });
     try {
       if (IN_APP) say('⚠ In-app browsers usually block the sign-in window — if nothing happens, open this page in Safari/Chrome.', true);
-      else say(email ? 'Opening DogeOS sign-in — choose <b>Email</b> in the sign-in window…' : 'Opening DogeOS sign-in…');
+      else say(email ? 'Opening DogeOS sign-in — choose <b>Email</b> in the sign-in window…' : provider === 'google' ? 'Opening DogeOS Google sign-in…' : 'Opening DogeOS sign-in…');
       const sdk = await Promise.race([loadSdk(), timeout]);
-      const r = await Promise.race([sdk.open(), timeout]); if (my !== xAttempt) return;
+      const r = await Promise.race([sdk.open(provider), timeout]); if (my !== xAttempt) return;
       clearTimeout(timer); await useProvider(r.provider, 'DogeOS wallet');
     } catch (e) {
       if (my !== xAttempt) return;
@@ -233,7 +233,7 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
       btns.innerHTML = isMobile
         ? `<small>No wallet found. Open this page in your wallet app's in-app browser (MetaMask, MyDoge…):</small><br><button id="dwmm">Open in MetaMask</button>`
         : `<small>No wallet found. Install MetaMask or MyDoge (or another EVM wallet), then reload.</small><br><button id="dwconnect">Retry</button>`;
-      btns.innerHTML = '<button id="dwx">𝕏 Sign in with X (DogeOS wallet)</button><br>' + btns.innerHTML;
+      btns.innerHTML = '<button id="dwx">𝕏 Sign in with X (DogeOS wallet)</button> <button id="dwg">G Sign in with Google (DogeOS wallet)</button><br>' + btns.innerHTML;
       return;
     }
     if (!account) { acct.innerHTML = ''; btns.innerHTML = CONNECT_BTNS; return; }
@@ -345,7 +345,7 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
   window.addEventListener('beforeunload', e => { if (run) { e.preventDefault(); e.returnValue = 'Leaving forfeits your entry fee.'; } });
   ui.addEventListener('click', e => {
     const bt = e.target.closest ? e.target.closest('button') || e.target : e.target; const id = bt.id;
-    if (id === 'dwconnect') pickWallet(); else if (id === 'dwx') connectX(); else if (id === 'dwemail') connectX(true);
+    if (id === 'dwconnect') pickWallet(); else if (id === 'dwx') connectX(); else if (id === 'dwemail') connectX(true); else if (id === 'dwg') connectX(false, 'google');
     else if (/^dwpick\d+$/.test(id)) { const d = $('dwbtns').__list[+bt.dataset.i]; connect(d.provider, d.info.name); }
     else if (id === 'dwother') connect(window.ethereum, 'Other wallet'); else if (id === 'dwback') render(); else if (id === 'dwswitch') ensureChain().then(render).catch(err => say(errText(err), true));
     else if (id === 'dwpay') pay(); else if (id === 'dwforfeit') signForfeit(); else if (id === 'dwaccept') signAccept(); else if (id === 'dwretry') retryClaim();
