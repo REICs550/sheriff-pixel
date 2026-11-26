@@ -230,9 +230,11 @@ const NOISE = [0, 1, 2, 3].map(() => { const c = document.createElement('canvas'
 
 // ---------- state ----------
 let state = 'title', paused = false, T = 0, time = 0, camX = 0, shake = 0, flashFx = 0, introT = 0, endT = 0, overT = 0;
+let diff = { enemySpeed: 1, aggro: 1, drawWindow: 1, fakeOut: 0.65, name: null }; // pay-to-play tier difficulty (free page: defaults)
 let hits = 0, player, hat, orbs, jars, bandits, parts, texts, flags, saved, jarsFreed, hearts, damaged, cheerD, checkpoint, sd, endStats, cheerMarks, hintJar, tumble;
 function startGame() {
   setPaused(false); if (window.SheriffRewards && window.SheriffRewards.onStart() === false) return;
+  const dd = window.SheriffRewards && window.SheriffRewards.difficulty; diff = Object.assign({ enemySpeed: 1, aggro: 1, drawWindow: 1, fakeOut: 0.65, name: null, mult: 1 }, dd || {});
   state = 'play'; time = 0; camX = 0; introT = 0; shake = 0; flashFx = 0;
   player = { x: 30, y: GY - 16, w: 12, h: 16, vx: 0, vy: 0, face: 1, onGround: true, coy: 0, jbuf: 0, inv: 0, lock: 0, flashCd: 0, anim: 0, dizzy: 0 };
   hat = null; parts = []; texts = []; saved = 0; jarsFreed = 0; hearts = 3; hits = 0; damaged = false; cheerD = 0; cheerMarks = 0; hintJar = false;
@@ -311,8 +313,8 @@ function updatePlay(dt) {
   for (const b of bandits) {
     b.gl -= dt; if (b.gl < 0) b.gl = 0.3 + Math.random() * 2.5;
     if (b.stun > 0) { b.stun -= dt; continue; }
-    const pdx = p.x + 6 - b.x, near = Math.abs(pdx) < 110 && Math.abs(p.y + 16 - b.y) < 26;
-    const sp = near ? 58 : 30; if (near) b.dir = Math.sign(pdx) || b.dir;
+    const pdx = p.x + 6 - b.x, near = Math.abs(pdx) < 110 * diff.aggro && Math.abs(p.y + 16 - b.y) < 26;
+    const sp = (near ? 58 : 30) * diff.enemySpeed; if (near) b.dir = Math.sign(pdx) || b.dir;
     b.x += b.dir * sp * dt; b.anim += dt * sp / 8;
     if (b.x < b.a) { b.x = b.a; b.dir = 1; } if (b.x > b.b) { b.x = b.b; b.dir = -1; }
     const bb = { x: b.x - 5, y: b.y - 17, w: 10, h: 17 };
@@ -358,7 +360,7 @@ function updateShowdown(dt) {
     else if (s.t >= s.wait) { s.ph = 'draw'; s.t = 0; s.msg = 'DRAW!'; s.sub = 'FLASH NOW!'; play('signal', 0.6); }
   } else if (s.ph === 'draw') {
     if (hit('flash')) { s.react = s.t; flashFx = 0.35; play('flash', 0.6); s.pw++; s.bossStun = 1.6; burst(s.bossX, GY - 14, 14, ['#ffe29a', '#fff'], 90, 0, 2, 0.6); roundResult(true, Math.round(s.t * 1000) + ' ms!  NICE DRAW!', s.pw >= 2 ? 'The boss is dazzled!' : 'One more!'); }
-    else if (s.t > WINDOWS[Math.min(s.pw, 2)]) { roundResult(false, 'TOO SLOW!', 'The boss zaps you with static!'); s.zap = 0.6; }
+    else if (s.t > WINDOWS[Math.min(s.pw, 2)] * diff.drawWindow) { roundResult(false, 'TOO SLOW!', 'The boss zaps you with static!'); s.zap = 0.6; }
   } else if (s.ph === 'result') {
     if (s.t > 1.9) {
       if (!s.won) { p.inv = 0; damage(0); if (state === 'over') return; p.dizzy = 0; }
@@ -371,7 +373,7 @@ function updateShowdown(dt) {
     if (s.t > 3.2) toEnd();
   }
 }
-function newRound() { const s = sd; s.round++; s.ph = 'wait'; s.t = 0; s.wait = 1.6 + Math.random() * 2.4; s.fake = Math.random() < 0.65 ? s.wait * (0.3 + Math.random() * 0.4) : -1; s.msg = 'READY...'; s.sub = 'Round ' + s.round + '  —  wins: ' + s.pw + '/2'; }
+function newRound() { const s = sd; s.round++; s.ph = 'wait'; s.t = 0; s.wait = 1.6 + Math.random() * 2.4; s.fake = Math.random() < diff.fakeOut ? s.wait * (0.3 + Math.random() * 0.4) : -1; s.msg = 'READY...'; s.sub = 'Round ' + s.round + '  —  wins: ' + s.pw + '/2'; }
 function roundResult(won, msg, sub) { const s = sd; s.ph = 'result'; s.t = 0; s.won = won; s.msg = msg; s.sub = sub; if (!won) { play('lose', 0.5); player.dizzy = 1.9; shake = 0.3; } }
 function toEnd() {
   state = 'end'; endT = 0;
@@ -553,6 +555,7 @@ function drawHUD() {
   ctx.fillStyle = g; ctx.fillRect(bx, 10, bw * cheerD, 10); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(bx, 10, bw * cheerD, 2);
   for (let i = 1; i < 4; i++) { ctx.fillStyle = '#2a1a22'; ctx.fillRect(bx + bw * i / 4, 10, 1, 10); }
   txt(Math.round(cheerD * 100) + '%', bx + bw / 2, 15.5, 7, '#fff');
+  if (diff.name) txt(String(diff.name).toUpperCase() + ' TIER  x' + diff.mult, W / 2, 31, 6, '#ffd23f');
   // time + abilities
   txt(fmtT(time), W - 48, 12.5, 8, time <= 180 ? '#fff' : '#ffb0b0', 'center');
   const fr = player.flashCd > 0 ? 1 - player.flashCd / 0.9 : 1;
@@ -645,7 +648,7 @@ function frame(now) {
   draw();
 }
 requestAnimationFrame(frame);
-window.__game = { get state() { return state; }, get paused() { return paused; }, get musicOn() { return AC ? !!musicSrc : !!music && !music.paused; }, get audio() { return AC ? 'webaudio:' + AC.state : snd ? 'html' : 'none'; }, get player() { return player; }, get saved() { return saved; }, get hearts() { return hearts; }, get jars() { return jarsFreed; }, get sd() { return sd; }, startGame, press, release,
+window.__game = { get state() { return state; }, get paused() { return paused; }, get musicOn() { return AC ? !!musicSrc : !!music && !music.paused; }, get audio() { return AC ? 'webaudio:' + AC.state : snd ? 'html' : 'none'; }, get player() { return player; }, get saved() { return saved; }, get hearts() { return hearts; }, get jars() { return jarsFreed; }, get sd() { return sd; }, get diff() { return diff; }, startGame, press, release,
   debugWarp(x) { player.x = x; player.y = GY - 40; camX = clamp(x - 200, 0, LEVEL_W - W); }, stop() { state = 'title'; setPaused(false); setMusic(false); }, debugFinish() { toEnd(); }, debugBeatBoss() { startShowdown(); sd.pw = 2; sd.ph = 'win'; toEnd(); }, debugHit() { player.inv = 0; damage(0); }, get hits() { return hits; }, debugGive(n) { saved = Math.min(TOTAL, saved + n); }, debugBalls(n) { orbs.slice(0, n).forEach(o => { if (!o.got) { o.got = true; saved++; } }); }, debugDie() { player.inv = 0; hearts = 1; damage(0); } };
 })();
 

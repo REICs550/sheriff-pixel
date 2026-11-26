@@ -1,0 +1,67 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sheriff Pixel — Terms of Use &amp; Official Rules</title><link rel="icon" type="image/png" href="icon-192.png">
+<style>body{background:#1b1424;color:#f3eefa;font:15px/1.55 "Courier New",monospace;margin:0;padding:18px}main{max-width:760px;margin:auto}
+h1{color:#ffe29a;font-size:22px}h2{color:#ffd23f;font-size:17px;margin-top:26px;border-bottom:1px solid #4a4256}a{color:#ffe29a}
+table{border-collapse:collapse;margin:8px 0}td,th{border:1px solid #4a4256;padding:4px 8px;text-align:left}.warn{background:#7d1f30;color:#ffe29a;padding:8px 10px;border-radius:8px}
+code{color:#a8d4ff}small{color:#a8a0b8}</style></head><body><main>
+<p><a href="play-dapp.html">← Back to the game</a></p>
+<h1>🤠 Sheriff Pixel — Terms of Use &amp; Official Rules</h1>
+<p><small>Version 2026-11-26 · Network: DogeOS Chikyu Testnet</small></p>
+<p class="warn"><b>TESTNET.</b> The pay-to-play mode currently runs on the DogeOS Chikyu Testnet (chain 6281971). Test DOGE has <b>no monetary value</b>, cannot be bought from us, and cannot be redeemed for anything. These terms describe how the game works today and how it is intended to work if it launches on DogeOS mainnet. Any mainnet launch will publish updated terms first.</p>
+<p>By paying an entry fee you agree to these Terms and Official Rules. If you do not agree, don't play the paid mode. The free version of the game needs no wallet and has no entry fee.</p>
+
+<h2 id="eligibility">1. Who can play</h2>
+<ul><li>You must be <b>18 or older</b> (or the age of majority where you live, if higher). The page asks you to confirm this before your first paid game.</li>
+<li>You must be in a place where paid-entry games of skill are legal for you. Paid play is <b>not offered</b> in these regions (list under legal review, may change): countries CU, IR, KP, SY, RU, BY, MM, VE, AF, IQ, LY, SD, SS, YE, SO, CF, CD, ZW, CN, DZ, BD, NP, MA, EG, QA, SA, KW, AE, PK, TR, ID; US states/regions US-AZ, US-AR, US-CT, US-DE, US-LA, US-MT, US-SC, US-SD, US-TN, US-WA, US-IN, US-ME, UA-43, UA-14, UA-09. On testnet the region check only shows a notice; on mainnet entries from blocked regions are refused. Don't use a VPN or other means to hide your location.</li>
+<li>One person, one wallet. Don't play on behalf of someone else.</li></ul>
+
+<h2 id="rules">2. Official Rules — how a paid run works</h2>
+<ol><li>Connect a wallet on DogeOS Chikyu Testnet and pick an <b>entry tier</b>. You pay the tier's entry fee to the SheriffArcade smart contract (<a href="https://blockscout.testnet.dogeos.com/address/0xf24E5251ad3DcB4bB66C1d669d9c6E5191CFE49a">0xf24E5251ad3DcB4bB66C1d669d9c6E5191CFE49a</a>). The fee you pay must equal the tier's fee exactly; the contract and the server both check it.</li>
+<li>Play one run of Pixel Gulch. To win you must reach the end of the level and <b>beat the High Noon boss</b> (best-of-3 quick-draw).</li>
+<li>If you win, our server checks the run and posts the result on-chain. The contract computes the reward. Nothing is paid until <b>you sign</b> <code>acceptReward</code> with the exact terms shown.</li>
+<li>If you die, quit, restart, leave the page or run out of time, the run fails. <b>Your entry fee stays in the prize pool. There are no refunds on failed runs.</b> You sign <code>acknowledgeForfeit</code> to confirm; unsigned unfinished runs forfeit automatically after 30 minutes.</li>
+<li>One unsigned run per wallet: you can't start a new paid game until your last result is signed.</li></ol>
+
+<h2 id="tiers">3. Entry tiers</h2>
+<table><tr><th>Tier</th><th>Entry</th><th>Reward multiplier</th><th>Difficulty</th><th>Max win after fee</th></tr>
+<tr><td>Deputy</td><td>1 test DOGE</td><td>×1</td><td>bandits 1× speed, quick-draw window 100%</td><td>1.98 test DOGE</td></tr>
+<tr><td>Sheriff</td><td>2 test DOGE</td><td>×2</td><td>bandits 1.25× speed, quick-draw window 88%</td><td>3.96 test DOGE</td></tr>
+<tr><td>Marshal</td><td>5 test DOGE</td><td>×5</td><td>bandits 1.5× speed, quick-draw window 76%</td><td>9.9 test DOGE</td></tr>
+</table>
+<p>A higher tier is a faster, harder game (faster and more aggressive bandits, a shorter reaction window in the boss duel, more fake-outs) and multiplies the reward by the tier multiplier. The operator may cap the highest tier offered, and a tier can be unavailable when the prize pool or the daily prize budget can't cover its maximum payout.</p>
+
+<h2 id="rewards">4. How rewards are calculated</h2>
+<p>Only a run that beats the boss earns a reward. Before the tier multiplier:</p>
+<p><code>formula = 0.5 base + 0.03 per orb collected (30 in the level) + time bonus − 0.2 per hit taken</code>, limited to at least 0.5 and at most 2.<br>
+Time bonus: 0.6 if you finish within 2:00, fading evenly to 0 at 5:00.</p>
+<p><code>winnings = formula × tier multiplier</code><br><code>house fee = 1% of winnings</code><br><code>you receive = winnings − house fee</code></p>
+<p>Example (Sheriff tier ×2): 20 orbs, 3:00, 1 hit → formula 1.3 → winnings 2.6 → fee 0.026 → you receive 2.574 test DOGE.</p>
+<p>The <b>1% fee on winnings</b> is taken only from a win. A failed run costs only its entry fee. The fee is sent to the operator's fee address. Results the server can't verify (impossible times, orb or hit counts) earn nothing; all limits are also enforced by the contract.</p>
+
+<h2 id="odds">5. Odds and risk</h2>
+<p>This is a <b>game of skill</b>, not a lottery or a game of chance: there are no fixed odds, and whether you win depends on how you play. You can lose your <b>whole entry fee</b> on any run. Higher tiers are harder, so you are more likely to lose. Testnet history before tiers: 4 of 23 paid runs beat the boss (mostly our own test runs). Rewards depend on the prize pool having funds; the contract reserves the maximum payout of every open run, so a win that was posted can always be paid.</p>
+
+<h2 id="responsible">6. Responsible play</h2>
+<ul><li>Only play with what you can afford to lose. Never chase losses.</li>
+<li>Limits: at most 20 paid entries per wallet per day, 10 rewarded runs per wallet per day, a daily prize budget, and a maximum single payout of 10 test DOGE.</li>
+<li>You can set your <b>own daily limit</b> on the page ("Set my daily limit"). It's stored on your device.</li>
+<li>If gaming stops being fun, take a break. In the US you can call or text <b>1-800-GAMBLER</b> or visit <a href="https://www.ncpgambling.org/">ncpgambling.org</a>; elsewhere, look for a local support service.</li></ul>
+
+<h2 id="privacy">7. Privacy note</h2>
+<ul><li>We don't ask for your name, email or password. Sign-in with X, Google or email is handled by DogeOS's wallet service under its own terms; we only receive your public wallet address.</li>
+<li>Our reward server sees your wallet address, run ids, game results (orbs, time, hits), and your IP address. The IP address is used only to check the blocked-region list (it may be sent to the free <a href="https://ipwho.is/">ipwho.is</a> lookup service) and for rate limiting; we don't store it with your results.</li>
+<li>Entries, results and payouts are <b>public on the blockchain</b> forever, linked to your wallet address.</li>
+<li>Your browser stores your terms acceptance, chosen tier and self-limit locally (localStorage). Clearing site data removes them.</li>
+<li>We don't sell data or use ad trackers.</li></ul>
+
+<h2 id="fair">8. Fair play</h2>
+<p>Cheating, bots, modified clients, exploiting bugs, or multiple wallets to dodge limits are not allowed. Suspicious results may be refused, and we may refund an entry fee instead of paying a reward (the contract allows refunds of open runs). We can pause the arcade at any time.</p>
+
+<h2 id="other">9. Other terms</h2>
+<ul><li>The game is provided "as is". Blockchain networks, wallets and our server can fail; we're not responsible for network fees, lost keys or wallet issues.</li>
+<li>You are responsible for any taxes on winnings where you live.</li>
+<li>We may change these terms; the page asks you to accept again when the version changes.</li>
+<li>Contact: <a href="https://github.com/REICs550/sheriff-pixel/issues">github.com/REICs550/sheriff-pixel/issues</a>.</li></ul>
+<p><small>Sheriff Pixel is an independent game and isn't operated by DogeOS or MyDoge.</small></p>
+<p><a href="play-dapp.html">← Back to the game</a> · <a href="index.html">Free version</a></p>
+</main></body></html>
