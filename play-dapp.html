@@ -119,6 +119,7 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
   const DIFF_LABEL = ['Normal', 'Hard: faster bandits, quicker draw', 'Very hard: fastest bandits, quickest draw'];
   const ls = { get: k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
   const termsOk = () => { const t = ls.get(TERMS_KEY); return !!(t && t.v === TERMS_V && t.age18 === true); };
+  const gateChk = { dwage: false, dwterms: false, dwregion: false }; // survives re-renders while the gate is open
   let tierIdx = Math.min(Math.max(0, +(ls.get(TIER_KEY) || 0)), TIERS.length - 1), elig = null, gate = false;
   const tierByIndex = i => TIERS.find(t => t.index === i) || TIERS[0];
   const weiOf = d => { const [a, b = ''] = String(d).split('.'); return BigInt(a) * 10n ** 18n + BigInt((b + '0'.repeat(18)).slice(0, 18) || '0'); };
@@ -287,9 +288,9 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
     tier_over_payout_cap: 'over the per-payout cap', daily_budget: 'today\'s prize budget is low', pool_low: 'prize pool too low right now', tier_disabled: 'disabled', tier_not_offered: 'not offered', not_on_chain: 'not available', tier_fee_mismatch: 'config mismatch' };
   function gateCard() {
     return `<div style="text-align:left;margin:6px 0"><b style="color:#ffe29a">Before your first paid game</b>
-<label><input type="checkbox" id="dwage"> I am <b>18 or older</b> (or the age of majority where I live, if higher).</label>
-<label><input type="checkbox" id="dwterms"> I have read and accept the <a href="terms.html" target="_blank" rel="noopener">Terms of Use &amp; Official Rules</a> (skill game, entry tiers, ${FEE_PCT} fee on winnings, no refunds on failed runs) and the <a href="terms.html#privacy" target="_blank" rel="noopener">privacy note</a>.</label>
-<label><input type="checkbox" id="dwregion"> Paid play is legal where I am, and I'm not in a blocked region.</label>
+<label><input type="checkbox" id="dwage"${gateChk.dwage ? ' checked' : ''}> I am <b>18 or older</b> (or the age of majority where I live, if higher).</label>
+<label><input type="checkbox" id="dwterms"${gateChk.dwterms ? ' checked' : ''}> I have read and accept the <a href="terms.html" target="_blank" rel="noopener">Terms of Use &amp; Official Rules</a> (skill game, entry tiers, ${FEE_PCT} fee on winnings, no refunds on failed runs) and the <a href="terms.html#privacy" target="_blank" rel="noopener">privacy note</a>.</label>
+<label><input type="checkbox" id="dwregion"${gateChk.dwregion ? ' checked' : ''}> Paid play is legal where I am, and I'm not in a blocked region.</label>
 <small>Saved on this device (version ${esc(TERMS_V)}). Testnet: test DOGE has no value.</small></div><button id="dwgateok">Continue</button> <button id="dwgateno">Cancel</button>`;
   }
   function tierCard(bal) {
@@ -432,13 +433,14 @@ html,body{margin:0;height:100%;background:#1b1424;overflow:hidden;touch-action:n
     ui.className = ''; say(''); render();
   }
   window.addEventListener('beforeunload', e => { if (run) { e.preventDefault(); e.returnValue = 'Leaving forfeits your entry fee.'; } });
+  ui.addEventListener('change', e => { if (e.target && e.target.id in gateChk) gateChk[e.target.id] = !!e.target.checked; });
   ui.addEventListener('click', e => {
     const bt = e.target.closest ? e.target.closest('button') || e.target : e.target; const id = bt.id;
     if (id === 'dwconnect') pickWallet(); else if (id === 'dwx') connectX(); else if (id === 'dwemail') connectX(true); else if (id === 'dwg') connectX(false, 'google');
     else if (/^dwpick\d+$/.test(id)) { const d = $('dwbtns').__list[+bt.dataset.i]; connect(d.provider, d.info.name); }
     else if (id === 'dwother') connect(window.ethereum, 'Other wallet'); else if (id === 'dwback') render(); else if (id === 'dwswitch') ensureChain().then(render).catch(async err => { await refreshAccount(); say(isUserCancel(err) ? 'Network switch cancelled.' : errText(err), true); render(); }); else if (id === 'dwdisconnect') disconnectWallet();
     else if (/^dwtier\d+$/.test(id)) { tierIdx = +bt.dataset.t; ls.set(TIER_KEY, tierIdx); render(); }
-    else if (id === 'dwgateok') { if (!($('dwage') && $('dwage').checked && $('dwterms').checked && $('dwregion').checked)) { say('Please confirm all three boxes to continue.', true); return; }
+    else if (id === 'dwgateok') { if (!(gateChk.dwage && gateChk.dwterms && gateChk.dwregion)) { say('Please confirm all three boxes to continue.', true); return; }
       ls.set(TERMS_KEY, { v: TERMS_V, age18: true, at: new Date().toISOString() }); gate = false; say('Thanks — terms accepted. Pick a tier and pay to play.'); render(); }
     else if (id === 'dwgateno') { gate = false; say(''); render(); }
     else if (id === 'dwlimit') { const cur = ls.get(SELF_KEY); const v = prompt('Responsible play: max paid games per day on this device (empty = no limit)', cur || ''); if (v !== null) { const n = parseInt(v, 10); ls.set(SELF_KEY, n > 0 ? n : null); say(n > 0 ? `Daily limit set: ${n} paid game(s).` : 'Daily limit removed.'); render(); } }
